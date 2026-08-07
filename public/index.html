@@ -4,97 +4,79 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ego Messenger</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/style.css">
   <script src="/socket.io/socket.io.js"></script>
 </head>
-<body class="dark-theme">
+<body>
 
   <div id="authContainer" class="auth-box">
     <h2>ego Messenger</h2>
     <div id="authTabs">
-      <button onclick="switchAuthTab('login')" id="loginTabBtn" class="active">Вход</button>
-      <button onclick="switchAuthTab('register')" id="regTabBtn">Регистрация</button>
+      <button id="tabLogin" class="active" onclick="switchTab('login')">Вход</button>
+      <button id="tabRegister" onclick="switchTab('register')">Регистрация</button>
     </div>
-    
+
     <form id="authForm" onsubmit="handleAuth(event)">
-      <input type="text" id="authUsername" placeholder="Имя пользователя" required>
-      <input type="email" id="authEmail" placeholder="Email (только для регистрации)" style="display:none;">
-      <input type="password" id="authPassword" placeholder="Пароль" required>
+      <input type="text" id="usernameInput" placeholder="Имя пользователя" required />
+      <input type="password" id="passwordInput" placeholder="Пароль" required />
       <button type="submit" id="authSubmitBtn">Войти</button>
     </form>
   </div>
 
   <div id="appContainer" style="display: none;">
+    
     <aside class="sidebar">
       <div class="user-profile-bar">
-        <img id="myAvatar" src="/uploads/avatars/default.png" alt="Avatar" onclick="openProfileModal()">
-        <span id="myUsername">...</span>
+        <img id="myAvatar" src="https://via.placeholder.com/40" alt="Avatar">
+        <span id="myUsername" style="font-weight: bold;">User</span>
       </div>
-      
-      <div class="search-bar">
-        <input type="text" id="userSearchInput" placeholder="Поиск пользователей..." oninput="searchUsers(this.value)">
-      </div>
-      <div id="searchResults" class="search-results-list"></div>
 
-      <h3>Контакты</h3>
-      <div id="contactsList" class="contacts-list"></div>
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Поиск пользователей..." oninput="searchUsers()">
+      </div>
+
+      <div class="contacts-list" id="contactsList">
+        </div>
     </aside>
 
     <main class="chat-area">
-      <header class="chat-header" id="chatHeader" style="display: none;">
+      <header class="chat-header">
         <div class="chat-user-info">
-          <img id="chatUserAvatar" src="" alt="">
-          <div>
-            <h4 id="chatUserName">Выберите чат</h4>
-            <span id="chatUserStatus" class="status-offline">offline</span>
-          </div>
+          <img id="chatAvatar" src="https://via.placeholder.com/40" alt="Avatar" style="display:none;">
+          <h3 id="chatTitle">Выберите чат для начала общения</h3>
         </div>
-        <div class="call-buttons">
-          <button onclick="startCall(false)" title="Аудиозвонок">📞</button>
-          <button onclick="startCall(true)" title="Видеозвонок">📹</button>
+        <div class="call-buttons" id="callButtons" style="display: none;">
+          <button onclick="startCall('audio')" title="Голосовой звонок">📞</button>
+          <button onclick="startCall('video')" title="Видеозвонок">📹</button>
         </div>
       </header>
 
-      <div id="messagesContainer" class="messages-container"></div>
+      <div class="messages-container" id="messagesContainer">
+        </div>
 
       <footer class="chat-footer" id="chatFooter" style="display: none;">
-        <input type="text" id="messageInput" placeholder="Напишите сообщение..." onkeydown="handleKeyPress(event)" oninput="sendTyping()">
+        <button class="media-btn" onclick="triggerFileInput()" title="Прикрепить файл">📎</button>
+        <input type="file" id="fileInput" style="display: none;" onchange="sendFile(event)">
         
-        <button id="voiceBtn" class="media-btn" title="Голосовое">🎤</button>
-        <button id="videoNoteBtn" class="media-btn" title="Кружочек">📷</button>
-        <button onclick="sendMessage()" class="send-btn">Отправить</button>
+        <input type="text" id="messageInput" placeholder="Напишите сообщение..." onkeydown="if(event.key === 'Enter') sendMessage()">
+        
+        <button class="media-btn" id="voiceBtn" onclick="toggleVoiceRecord()" title="Голосовое сообщение">🎙️</button>
+        <button class="send-btn" onclick="sendMessage()">Отправить</button>
       </footer>
     </main>
+
   </div>
 
-  <div id="incomingCallModal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <img id="callerAvatar" src="" class="call-avatar">
-      <h3 id="callerName">Входящий вызов...</h3>
-      <div class="call-actions">
-        <button onclick="acceptCall()" class="btn-accept">Ответить</button>
-        <button onclick="rejectCall()" class="btn-reject">Отклонить</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="activeCallScreen" class="call-screen" style="display:none;">
+  <div id="callScreen" class="call-screen" style="display: none;">
     <div class="video-grid">
       <video id="remoteVideo" autoplay playsinline></video>
       <video id="localVideo" autoplay playsinline muted></video>
     </div>
     <div class="call-controls">
-      <button onclick="endCall()" class="btn-end-call">Завершить звонок</button>
+      <button class="btn-end-call" onclick="endCall()">Завершить звонок</button>
     </div>
   </div>
 
-  <div id="videoNoteModal" class="modal" style="display:none;">
-    <div class="modal-content circle-preview">
-      <video id="videoNotePreview" autoplay muted playsinline class="circle-video"></video>
-      <button id="stopVideoNoteBtn" class="btn-record-stop">Остановить и отправить</button>
-    </div>
-  </div>
-
-  <script src="app.js"></script>
+  <script src="/script.js"></script>
 </body>
 </html>
