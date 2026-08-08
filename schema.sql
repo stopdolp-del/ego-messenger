@@ -1,8 +1,7 @@
--- Script for HeidiSQL / MySQL Database creation for ego Messenger
-CREATE DATABASE IF NOT EXISTS `messenger_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `messenger_db`;
+-- Переключаемся на рабочую базу Aiven
+USE `defaultdb`;
 
--- 1. Table users (with avatar_url, bio, age)
+-- 1. Таблица users (со всеми полями сразу)
 CREATE TABLE IF NOT EXISTS `users` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `username` VARCHAR(50) NOT NULL UNIQUE,
@@ -16,12 +15,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Safe column additions for existing databases
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `avatar_url` TEXT NULL;
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `bio` TEXT NULL;
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `age` INT NULL;
-
--- 2. Table contacts
+-- 2. Таблица contacts
 CREATE TABLE IF NOT EXISTS `contacts` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `user_id` INT NOT NULL,
@@ -33,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `contacts` (
   UNIQUE KEY `unique_user_contact` (`user_id`, `contact_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 3. Table servers
+-- 3. Таблица servers
 CREATE TABLE IF NOT EXISTS `servers` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(100) NOT NULL,
@@ -42,19 +36,19 @@ CREATE TABLE IF NOT EXISTS `servers` (
   FOREIGN KEY (`owner_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 4. Table server_members
+-- 4. Таблица server_members
 CREATE TABLE IF NOT EXISTS `server_members` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `server_id` INT NOT NULL,
   `user_id` INT NOT NULL,
-  `role` VARCHAR(20) DEFAULT 'member', -- 'admin', 'moderator', 'member'
+  `role` VARCHAR(20) DEFAULT 'member',
   `joined_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`server_id`) REFERENCES `servers`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
   UNIQUE KEY `unique_server_user` (`server_id`, `user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 5. Table channels
+-- 5. Таблица channels
 CREATE TABLE IF NOT EXISTS `channels` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `server_id` INT NOT NULL,
@@ -64,7 +58,7 @@ CREATE TABLE IF NOT EXISTS `channels` (
   FOREIGN KEY (`server_id`) REFERENCES `servers`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 6. Table messages
+-- 6. Таблица messages
 CREATE TABLE IF NOT EXISTS `messages` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `channel_id` INT NULL,
