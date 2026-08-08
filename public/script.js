@@ -77,7 +77,6 @@ function initCanvas() {
       if (p.x < 0) p.x = w; if (p.x > w) p.x = 0;
       if (p.y < 0) p.y = h; if (p.y > h) p.y = 0;
 
-      // React slightly to mouse
       const dx = mouse.x - p.x;
       const dy = mouse.y - p.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -153,10 +152,6 @@ function bootApp() {
   loadContacts();
   loadServersRail();
   setInterval(pollStatus, 5000);
-
-  if (target.type === 'dm' && target.id) {
-    // restored via contacts
-  }
 }
 
 async function pollStatus() {
