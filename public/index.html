@@ -186,4 +186,72 @@
 <!-- Video Note Recorder Modal -->
 <div class="mo" id="m-vnote">
   <div class="mb" style="max-width:320px;text-align:center;">
-    <div class="mh"><h3>Видеокружочек</h3><button 
+    <div class="mh"><h3>Видеокружочек</h3><button class="mclose" onclick="closeVnoteModal()">✕</button></div>
+    <div class="vnote-circle">
+      <video id="vn-prev" autoplay muted playsinline></video>
+      <div class="rec-badge" id="rec-badge"><div class="rec-dot"></div>REC</div>
+    </div>
+    <div id="vn-timer" style="margin:10px 0;font-size:24px;font-weight:900;color:var(--neon-cyan)">00:00</div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button class="btn btn-secondary" onclick="closeVnoteModal()">Отмена</button>
+      <button class="btn btn-primary" id="vn-start" onclick="startVnote()">Запись</button>
+      <button class="btn btn-danger" id="vn-stop" style="display:none;" onclick="stopVnote()">Стоп</button>
+    </div>
+  </div>
+</div>
+
+<!-- Voice Recorder Modal -->
+<div class="mo" id="m-voice">
+  <div class="mb" style="max-width:320px;text-align:center;">
+    <div class="mh"><h3>Голосовое сообщение</h3><button class="mclose" onclick="closeVoiceModal()">✕</button></div>
+    <div id="vr-timer" style="font-size:32px;font-weight:900;margin:20px 0;color:var(--text-main);">00:00</div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button class="btn btn-secondary" onclick="closeVoiceModal()">Отмена</button>
+      <button class="btn btn-primary" id="vr-start-btn" onclick="startVoice()">Начать</button>
+      <button class="btn btn-danger" id="vr-stop-btn" style="display:none;" onclick="stopVoice()">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Incoming Call Modal -->
+<div class="mo" id="m-call-in">
+  <div class="mb" style="max-width:320px;text-align:center;">
+    <h3 style="margin-bottom:10px;">Входящий вызов</h3>
+    <div id="ci-name" style="font-size:18px;font-weight:800;margin-bottom:6px;">Пользователь</div>
+    <div id="ci-type" style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Звонок</div>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button class="btn btn-primary" onclick="acceptCall()">Принять</button>
+      <button class="btn btn-danger" onclick="rejectCall()">Отклонить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Active Call Modal -->
+<div class="mo" id="m-call-act">
+  <div class="mb wide">
+    <div class="mh"><h3 id="ca-title">Звонок</h3></div>
+    <div class="call-container">
+      <div class="call-remote">
+        <video id="vid-remote" autoplay playsinline></video>
+        <div class="call-local"><video id="vid-local" autoplay muted playsinline></video></div>
+      </div>
+      <div class="call-status" id="ca-status">Соединение...</div>
+      <div style="display:flex;justify-content:center;margin-top:10px;">
+        <button class="btn btn-danger" onclick="endCall()" style="max-width:200px;">Завершить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Server Modal -->
+<div class="mo" id="m-server">
+  <div class="mb">
+    <div class="mh"><h3>Сервер</h3><button class="mclose" onclick="closeModal('m-server')">✕</button></div>
+    <div class="fg"><label>Название сервера</label><input type="text" id="srv-name" placeholder="Моя тусовка"></div>
+    <button class="btn btn-primary" onclick="createServer()" style="margin-top:10px;">Создать сервер</button>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
