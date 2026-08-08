@@ -21,8 +21,7 @@ const io = new Server(server, {
   transports: ['websocket', 'polling'],
   pingTimeout: 60000,
   pingInterval: 25000,
-  allowEIO3: true,
-  path: '/socket.io/'
+  allowEIO3: true
 });
 
 app.use(cors());
@@ -34,74 +33,47 @@ app.use('/uploads', express.static('uploads'));
 const mkDir = (d) => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 };
+mkDir(path.join(__dirname, 'uploads', 'avatars'));
+mkDir(path.join(__dirname, 'uploads', 'voice'));
+mkDir(path.join(__dirname, 'uploads', 'videonotes'));
 
 const avatarStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const d = path.join(__dirname, 'uploads', 'avatars');
-    mkDir(d);
-    cb(null, d);
-  },
+  destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads', 'avatars')),
   filename: (req, file, cb) => cb(null, `ava_${uuidv4()}${path.extname(file.originalname)}`)
 });
 const uploadAvatar = multer({ storage: avatarStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 const voiceStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const d = path.join(__dirname, 'uploads', 'voice');
-    mkDir(d);
-    cb(null, d);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.webm';
-    cb(null, `voice_${uuidv4()}${ext}`);
-  }
+  destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads', 'voice')),
+  filename: (req, file, cb) => cb(null, `voice_${uuidv4()}${path.extname(file.originalname) || '.webm'}`)
 });
-const uploadVoice = multer({
-  storage: voiceStorage,
-  limits: { fileSize: 25 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const ok = /\.(webm|ogg|mp4|m4a)$/i.test(file.originalname) ||
-      /audio\/(webm|ogg|mp4|mpeg)/.test(file.mimetype) ||
-      /video\/webm/.test(file.mimetype);
-    cb(ok ? null : new Error('Разрешены только аудио .webm / .ogg'), ok);
-  }
-});
+const uploadVoice = multer({ storage: voiceStorage, limits: { fileSize: 25 * 1024 * 1024 } });
 
 const videoNoteStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const d = path.join(__dirname, 'uploads', 'videonotes');
-    mkDir(d);
-    cb(null, d);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.webm';
-    cb(null, `vnote_${uuidv4()}${ext}`);
-  }
+  destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads', 'videonotes')),
+  filename: (req, file, cb) => cb(null, `vnote_${uuidv4()}${path.extname(file.originalname) || '.webm'}`)
 });
-const uploadVideoNote = multer({
-  storage: videoNoteStorage,
-  limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const ok = /\.webm$/i.test(file.originalname) || /video\/webm/.test(file.mimetype);
-    cb(ok ? null : new Error('Разрешены только видео .webm'), ok);
-  }
-});
+const uploadVideoNote = multer({ storage: videoNoteStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 let pool;
 
 async function initDB() {
+  const dbHost = process.env.DB_HOST || 'mysql-ab4929f-stopdolp-032b.g.aivencloud.com';
+  const dbPort = process.env.DB_PORT || 25504;
+  const dbUser = process.env.DB_USER || 'avnadmin';
+  const dbPassword = process.env.DB_PASSWORD || '';
   const dbName = process.env.DB_NAME || 'defaultdb';
 
   pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'root',
+    host: dbHost,
+    port: dbPort,
+    user: dbUser,
+    password: dbPassword,
     database: dbName,
     waitForConnections: true,
     connectionLimit: 20,
     multipleStatements: true,
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined
+    ssl: { rejectUnauthorized: false }
   });
 
   await pool.execute(`
@@ -208,32 +180,7 @@ async function initDB() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
-  const patches = [
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS status_emoji VARCHAR(10) DEFAULT NULL`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS status_text VARCHAR(140) DEFAULT NULL`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS theme VARCHAR(20) DEFAULT 'dark'`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen DATETIME DEFAULT NULL`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT NULL`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS age INT DEFAULT NULL`,
-    `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS nickname VARCHAR(80) DEFAULT NULL`,
-    `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS is_blocked TINYINT(1) DEFAULT 0`,
-    `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS is_muted TINYINT(1) DEFAULT 0`,
-    `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pinned TINYINT(1) DEFAULT 0`,
-    `ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_code VARCHAR(16) DEFAULT NULL`,
-    `ALTER TABLE servers ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT NULL`,
-    `ALTER TABLE channels ADD COLUMN IF NOT EXISTS topic VARCHAR(200) DEFAULT NULL`,
-    `ALTER TABLE channels ADD COLUMN IF NOT EXISTS position INT DEFAULT 0`,
-    `ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_nsfw TINYINT(1) DEFAULT 0`,
-    `ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type VARCHAR(30) DEFAULT 'text'`
-  ];
-  for (const q of patches) {
-    try { await pool.execute(q); } catch (e) { /* already exists */ }
-  }
-
-  await pool.execute(`UPDATE servers SET invite_code = SUBSTRING(MD5(id), 1, 8) WHERE invite_code IS NULL`);
-
-  console.log(`[DB] ✅ База данных готова (${dbName})`);
+  console.log(`[DB] ✅ База данных подключена и проверена (${dbName} @ ${dbHost})`);
 }
 
 const safeUser = `id, username, email, is_verified, is_banned, avatar_url, bio, age, status_text, status_emoji, last_seen, created_at`;
@@ -255,10 +202,7 @@ function formatMessageRow(row, sender) {
 }
 
 async function getSenderInfo(userId) {
-  const [rows] = await pool.execute(
-    `SELECT username, is_verified, avatar_url FROM users WHERE id=?`,
-    [userId]
-  );
+  const [rows] = await pool.execute(`SELECT username, is_verified, avatar_url FROM users WHERE id=?`, [userId]);
   return rows[0] || null;
 }
 
@@ -285,38 +229,20 @@ async function saveMessage(data) {
   }, sender);
 }
 
-// ═══════════════════════════════ REST API ════════════════════════════════════
-
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, online: online.size });
-});
-
-app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Файл слишком большой' : err.message });
-  }
-  if (err) return res.status(400).json({ error: err.message || 'Ошибка загрузки' });
-  next();
-});
+// REST API
+app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password) return res.status(400).json({ error: 'Заполните все поля' });
-  if (username.length < 2) return res.status(400).json({ error: 'Имя минимум 2 символа' });
-  if (password.length < 4) return res.status(400).json({ error: 'Пароль минимум 4 символа' });
-
   try {
     const hash = await bcrypt.hash(password, 12);
-    const [r] = await pool.execute(
-      `INSERT INTO users (username, email, password_hash) VALUES (?,?,?)`,
-      [username.trim(), email.trim().toLowerCase(), hash]
-    );
+    const [r] = await pool.execute(`INSERT INTO users (username, email, password_hash) VALUES (?,?,?)`, [username.trim(), email.trim().toLowerCase(), hash]);
     const [rows] = await pool.execute(`SELECT ${safeUser} FROM users WHERE id=?`, [r.insertId]);
     res.json({ user: rows[0] });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Пользователь или email уже занят' });
-    console.error('[REGISTER]', err.message);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Имя или email уже заняты' });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -324,10 +250,7 @@ app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Заполните все поля' });
   try {
-    const [rows] = await pool.execute(
-      `SELECT id, username, email, password_hash, is_verified, is_banned, avatar_url, bio, age, status_text, status_emoji FROM users WHERE username=?`,
-      [username.trim()]
-    );
+    const [rows] = await pool.execute(`SELECT id, username, email, password_hash, is_verified, is_banned, avatar_url, bio, age, status_text, status_emoji FROM users WHERE username=?`, [username.trim()]);
     if (!rows.length) return res.status(401).json({ error: 'Пользователь не найден' });
     const u = rows[0];
     if (!await bcrypt.compare(password, u.password_hash)) return res.status(401).json({ error: 'Неверный пароль' });
@@ -335,8 +258,7 @@ app.post('/api/login', async (req, res) => {
     await pool.execute(`UPDATE users SET last_seen=NOW() WHERE id=?`, [u.id]);
     res.json({ user: u });
   } catch (err) {
-    console.error('[LOGIN]', err.message);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -350,17 +272,12 @@ app.get('/api/users/me/:id', async (req, res) => {
 
 app.post('/api/users/profile', async (req, res) => {
   const { userId, avatar_url, bio, age, status_text, status_emoji } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId обязателен' });
   try {
-    await pool.execute(
-      `UPDATE users SET avatar_url=?, bio=?, age=?, status_text=?, status_emoji=? WHERE id=?`,
-      [avatar_url || null, bio || null, age ? parseInt(age) : null, status_text || null, status_emoji || null, userId]
-    );
+    await pool.execute(`UPDATE users SET avatar_url=?, bio=?, age=?, status_text=?, status_emoji=? WHERE id=?`, [avatar_url || null, bio || null, age ? parseInt(age) : null, status_text || null, status_emoji || null, userId]);
     const [rows] = await pool.execute(`SELECT ${safeUser} FROM users WHERE id=?`, [userId]);
     res.json({ user: rows[0] });
   } catch (err) {
-    console.error('[PROFILE UPDATE]', err.message);
-    res.status(500).json({ error: 'Ошибка обновления профиля' });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -381,8 +298,6 @@ app.post('/api/upload/videonote', uploadVideoNote.single('video'), (req, res) =>
 
 app.post('/api/users/change-password', async (req, res) => {
   const { userId, oldPassword, newPassword } = req.body;
-  if (!userId || !oldPassword || !newPassword) return res.status(400).json({ error: 'Заполните все поля' });
-  if (newPassword.length < 4) return res.status(400).json({ error: 'Пароль минимум 4 символа' });
   try {
     const [rows] = await pool.execute(`SELECT password_hash FROM users WHERE id=?`, [userId]);
     if (!rows.length) return res.status(404).json({ error: 'Не найден' });
@@ -397,10 +312,7 @@ app.get('/api/users/search', async (req, res) => {
   const { query, currentUserId } = req.query;
   if (!query) return res.json([]);
   try {
-    const [r] = await pool.execute(
-      `SELECT id, username, is_verified, avatar_url, status_text, status_emoji FROM users WHERE (username LIKE ? OR email LIKE ?) AND id!=? LIMIT 20`,
-      [`%${query}%`, `%${query}%`, currentUserId || 0]
-    );
+    const [r] = await pool.execute(`SELECT id, username, is_verified, avatar_url, status_text, status_emoji FROM users WHERE (username LIKE ? OR email LIKE ?) AND id!=? LIMIT 20`, [`%${query}%`, `%${query}%`, currentUserId || 0]);
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -415,20 +327,19 @@ app.get('/api/users/:id', async (req, res) => {
 
 app.get('/api/contacts/:userId', async (req, res) => {
   try {
-    const [r] = await pool.execute(
-      `SELECT u.id, u.username, u.is_verified, u.is_banned, u.avatar_url, u.status_text, u.status_emoji, u.last_seen,
+    const [r] = await pool.execute(`
+      SELECT u.id, u.username, u.is_verified, u.is_banned, u.avatar_url, u.status_text, u.status_emoji, u.last_seen,
               c.nickname, c.is_blocked, c.is_muted, c.pinned
        FROM contacts c JOIN users u ON u.id=c.contact_id
-       WHERE c.user_id=? ORDER BY c.pinned DESC, u.username ASC`,
-      [req.params.userId]
-    );
+       WHERE c.user_id=? ORDER BY c.pinned DESC, u.username ASC
+    `, [req.params.userId]);
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/contacts', async (req, res) => {
   const { userId, contactId } = req.body;
-  if (!userId || !contactId || userId == contactId) return res.status(400).json({ error: 'Некорректные данные' });
+  if (!userId || !contactId || userId == contactId) return res.status(400).json({ error: 'Некорректно' });
   try {
     await pool.execute(`INSERT IGNORE INTO contacts (user_id, contact_id) VALUES (?,?)`, [userId, contactId]);
     await pool.execute(`INSERT IGNORE INTO contacts (user_id, contact_id) VALUES (?,?)`, [contactId, userId]);
@@ -439,8 +350,7 @@ app.post('/api/contacts', async (req, res) => {
 app.patch('/api/contacts/:userId/:contactId', async (req, res) => {
   const { nickname, is_blocked, is_muted, pinned } = req.body;
   try {
-    const fields = [];
-    const vals = [];
+    const fields = []; const vals = [];
     if (nickname !== undefined) { fields.push('nickname=?'); vals.push(nickname); }
     if (is_blocked !== undefined) { fields.push('is_blocked=?'); vals.push(is_blocked ? 1 : 0); }
     if (is_muted !== undefined) { fields.push('is_muted=?'); vals.push(is_muted ? 1 : 0); }
@@ -462,47 +372,30 @@ app.delete('/api/contacts/:userId/:contactId', async (req, res) => {
 app.get('/api/messages/dm/:userId/:contactId', async (req, res) => {
   try {
     const { userId, contactId } = req.params;
-    const [rows] = await pool.execute(
-      `SELECT m.*, u.username, u.is_verified, u.avatar_url
-       FROM messages m
-       JOIN users u ON u.id = m.sender_id
-       WHERE m.channel_id IS NULL
-         AND ((m.sender_id=? AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=?))
-       ORDER BY m.created_at ASC
-       LIMIT 200`,
-      [userId, contactId, contactId, userId]
-    );
+    const [rows] = await pool.execute(`
+      SELECT m.*, u.username, u.is_verified, u.avatar_url
+       FROM messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.channel_id IS NULL AND ((m.sender_id=? AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=?))
+       ORDER BY m.created_at ASC LIMIT 200
+    `, [userId, contactId, contactId, userId]);
     res.json(rows.map(r => formatMessageRow(r, r)));
-  } catch (e) {
-    console.error('[DM MESSAGES]', e.message);
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/messages/channel/:channelId', async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT m.*, u.username, u.is_verified, u.avatar_url
-       FROM messages m
-       JOIN users u ON u.id = m.sender_id
-       WHERE m.channel_id=?
-       ORDER BY m.created_at ASC
-       LIMIT 200`,
-      [req.params.channelId]
-    );
+    const [rows] = await pool.execute(`
+      SELECT m.*, u.username, u.is_verified, u.avatar_url
+       FROM messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.channel_id=? ORDER BY m.created_at ASC LIMIT 200
+    `, [req.params.channelId]);
     res.json(rows.map(r => formatMessageRow(r, r)));
-  } catch (e) {
-    console.error('[CHANNEL MESSAGES]', e.message);
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/servers/user/:userId', async (req, res) => {
   try {
-    const [r] = await pool.execute(
-      `SELECT s.* FROM servers s JOIN server_members sm ON sm.server_id=s.id WHERE sm.user_id=? ORDER BY s.created_at ASC`,
-      [req.params.userId]
-    );
+    const [r] = await pool.execute(`SELECT s.* FROM servers s JOIN server_members sm ON sm.server_id=s.id WHERE sm.user_id=? ORDER BY s.created_at ASC`, [req.params.userId]);
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -512,10 +405,7 @@ app.post('/api/servers', async (req, res) => {
   if (!name || !ownerId) return res.status(400).json({ error: 'Укажите название' });
   try {
     const inviteCode = uuidv4().replace(/-/g, '').substring(0, 8);
-    const [r] = await pool.execute(
-      `INSERT INTO servers (name, owner_id, description, invite_code) VALUES (?,?,?,?)`,
-      [name.trim(), ownerId, description || null, inviteCode]
-    );
+    const [r] = await pool.execute(`INSERT INTO servers (name, owner_id, description, invite_code) VALUES (?,?,?,?)`, [name.trim(), ownerId, description || null, inviteCode]);
     const sid = r.insertId;
     await pool.execute(`INSERT INTO server_members (server_id, user_id, role) VALUES (?,?,'owner')`, [sid, ownerId]);
     await pool.execute(`INSERT INTO channels (server_id, name, type, position) VALUES (?,?,?,?)`, [sid, 'общий', 'text', 0]);
@@ -526,10 +416,9 @@ app.post('/api/servers', async (req, res) => {
 
 app.post('/api/servers/join-invite', async (req, res) => {
   const { inviteCode, userId } = req.body;
-  if (!inviteCode || !userId) return res.status(400).json({ error: 'Неверные данные' });
   try {
     const [servers] = await pool.execute(`SELECT * FROM servers WHERE invite_code=?`, [inviteCode]);
-    if (!servers.length) return res.status(404).json({ error: 'Сервер не найден по коду' });
+    if (!servers.length) return res.status(404).json({ error: 'Сервер не найден' });
     const s = servers[0];
     await pool.execute(`INSERT IGNORE INTO server_members (server_id, user_id) VALUES (?,?)`, [s.id, userId]);
     res.json({ server: s });
@@ -538,32 +427,22 @@ app.post('/api/servers/join-invite', async (req, res) => {
 
 app.get('/api/servers/:serverId/members', async (req, res) => {
   try {
-    const [r] = await pool.execute(
-      `SELECT u.id, u.username, u.avatar_url, u.is_verified, sm.role FROM server_members sm JOIN users u ON u.id=sm.user_id WHERE sm.server_id=?`,
-      [req.params.serverId]
-    );
+    const [r] = await pool.execute(`SELECT u.id, u.username, u.avatar_url, u.is_verified, sm.role FROM server_members sm JOIN users u ON u.id=sm.user_id WHERE sm.server_id=?`, [req.params.serverId]);
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/servers/:serverId/channels', async (req, res) => {
   try {
-    const [r] = await pool.execute(
-      `SELECT * FROM channels WHERE server_id=? ORDER BY position ASC, created_at ASC`,
-      [req.params.serverId]
-    );
+    const [r] = await pool.execute(`SELECT * FROM channels WHERE server_id=? ORDER BY position ASC, created_at ASC`, [req.params.serverId]);
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/servers/:serverId/channels', async (req, res) => {
   const { name, type } = req.body;
-  if (!name) return res.status(400).json({ error: 'Укажите название' });
   try {
-    const [r] = await pool.execute(
-      `INSERT INTO channels (server_id, name, type) VALUES (?,?,?)`,
-      [req.params.serverId, name.trim(), type || 'text']
-    );
+    const [r] = await pool.execute(`INSERT INTO channels (server_id, name, type) VALUES (?,?,?)`, [req.params.serverId, name.trim(), type || 'text']);
     res.json({ id: r.insertId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -577,197 +456,110 @@ app.get('/api/saved/:userId', async (req, res) => {
 
 app.post('/api/saved', async (req, res) => {
   const { userId, content } = req.body;
-  if (!userId || !content) return res.status(400).json({ error: 'Неверные данные' });
   try {
     await pool.execute(`INSERT INTO saved_messages (user_id, content) VALUES (?,?)`, [userId, content]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ═══════════════════════════════ SOCKET.IO ═══════════════════════════════════
+// Socket.io
 const online = new Map();
 const sockToUser = new Map();
 
-function getOnlineUserIds() {
-  return [...online.keys()];
-}
-
 function emitToUser(userId, event, payload) {
-  const socketId = online.get(String(userId));
-  if (socketId) io.to(socketId).emit(event, payload);
+  const sId = online.get(String(userId));
+  if (sId) io.to(sId).emit(event, payload);
 }
 
 io.on('connection', (socket) => {
-  console.log(`[WS] connect: ${socket.id}`);
+  console.log(`[WS] Connected: ${socket.id}`);
 
   socket.on('user_connected', (userId) => {
     if (!userId) return;
     const uid = String(userId);
     online.set(uid, socket.id);
     sockToUser.set(socket.id, uid);
-    io.emit('user_connected', { userId: uid });
-    socket.emit('online_users', { users: getOnlineUserIds() });
-    console.log(`[WS] user online: ${uid}`);
+    io.emit('user_online', { userId: uid });
   });
 
-  socket.on('join_channel', (chId) => {
-    socket.join(`ch_${chId}`);
-  });
+  socket.on('join_channel', (chId) => socket.join(`ch_${chId}`));
+  socket.on('leave_channel', (chId) => socket.leave(`ch_${chId}`));
 
-  socket.on('leave_channel', (chId) => {
-    socket.leave(`ch_${chId}`);
-  });
-
-  socket.on('send_message', async (data) => {
+  socket.on('dm', async (data) => {
     try {
       const senderId = sockToUser.get(socket.id) || String(data.from);
-      if (!senderId || !data.content) return;
-
-      const payload = {
-        ...data,
-        from: parseInt(senderId, 10),
-        type: data.type || (data.channelId ? 'channel' : 'dm')
-      };
-
-      const msg = await saveMessage(payload);
-      if (data.reply) msg.reply = data.reply;
-      if (data.voice_dur) msg.voice_dur = data.voice_dur;
-
-      socket.emit('receive_message', msg);
-
-      if (payload.type === 'dm' && payload.to) {
-        emitToUser(payload.to, 'receive_message', msg);
-      } else if (payload.channelId) {
-        socket.to(`ch_${payload.channelId}`).emit('receive_message', msg);
-      }
-    } catch (err) {
-      console.error('[send_message]', err.message);
-      socket.emit('message_error', { error: 'Не удалось отправить сообщение' });
-    }
+      const msg = await saveMessage({ ...data, from: senderId, type: 'dm' });
+      socket.emit('dm', msg);
+      if (data.to) emitToUser(data.to, 'dm', msg);
+    } catch (e) { console.error('[DM ERROR]', e); }
   });
 
-  socket.on('typing', (data) => {
-    if (data.type === 'dm') {
-      emitToUser(data.to, 'typing', { from: data.from, fromName: data.fromName });
-    } else {
-      socket.to(`ch_${data.chId}`).emit('typing', { from: data.from, fromName: data.fromName });
-    }
+  socket.on('ch_msg', async (data) => {
+    try {
+      const senderId = sockToUser.get(socket.id) || String(data.from);
+      const msg = await saveMessage({ ...data, from: senderId, type: 'channel', channelId: data.chId });
+      socket.emit('ch_msg', msg);
+      if (data.chId) socket.to(`ch_${data.chId}`).emit('ch_msg', msg);
+    } catch (e) { console.error('[CH MSG ERROR]', e); }
   });
 
-  socket.on('stop_typing', (data) => {
-    if (data.type === 'dm') {
-      emitToUser(data.to, 'stop_typing', { from: data.from });
-    } else {
-      socket.to(`ch_${data.chId}`).emit('stop_typing', { from: data.from });
-    }
+  socket.on('typing', (d) => {
+    if (d.type === 'dm') emitToUser(d.to, 'typing', d);
+    else socket.to(`ch_${d.chId}`).emit('typing', d);
+  });
+  socket.on('stop_typing', (d) => {
+    if (d.type === 'dm') emitToUser(d.to, 'stop_typing', d);
+    else socket.to(`ch_${d.chId}`).emit('stop_typing', d);
   });
 
-  socket.on('read', (data) => {
-    emitToUser(data.to, 'read', { from: data.from, msgId: data.msgId });
+  socket.on('read', (d) => emitToUser(d.to, 'read', d));
+  socket.on('react', (d) => {
+    socket.emit('react', d);
+    if (d.type === 'dm') emitToUser(d.to, 'react', d);
+    else io.to(`ch_${d.chId}`).emit('react', d);
+  });
+  socket.on('edit_msg', (d) => {
+    socket.emit('edit_msg', d);
+    if (d.type === 'dm') emitToUser(d.to, 'edit_msg', d);
+    else io.to(`ch_${d.chId}`).emit('edit_msg', d);
+  });
+  socket.on('delete_msg', (d) => {
+    socket.emit('delete_msg', d);
+    if (d.type === 'dm') emitToUser(d.to, 'delete_msg', d);
+    else io.to(`ch_${d.chId}`).emit('delete_msg', d);
   });
 
-  socket.on('react', async (data) => {
-    const payload = { msgId: data.msgId, from: data.from, emoji: data.emoji };
-    socket.emit('react', payload);
-    if (data.type === 'dm') {
-      emitToUser(data.to, 'react', payload);
-    } else {
-      io.to(`ch_${data.chId}`).emit('react', payload);
-    }
-  });
-
-  socket.on('edit_msg', (data) => {
-    socket.emit('edit_msg', data);
-    if (data.type === 'dm') {
-      emitToUser(data.to, 'edit_msg', data);
-    } else {
-      io.to(`ch_${data.chId}`).emit('edit_msg', data);
-    }
-  });
-
-  socket.on('delete_msg', (data) => {
-    socket.emit('delete_msg', data);
-    if (data.type === 'dm') {
-      emitToUser(data.to, 'delete_msg', data);
-    } else {
-      io.to(`ch_${data.chId}`).emit('delete_msg', data);
-    }
-  });
-
-  // ── WebRTC signaling ───────────────────────────────────────────────────────
-  socket.on('call_user', async (data) => {
+  // WebRTC Signaling
+  socket.on('call_user', (d) => {
     const from = sockToUser.get(socket.id);
-    const targetSocket = online.get(String(data.to));
-
-    if (!targetSocket) {
-      socket.emit('call_rejected', { reason: 'offline' });
-      return;
-    }
-
-    io.to(targetSocket).emit('call_incoming', {
-      ...data,
-      from,
-      callerUsername: data.callerUsername,
-      callerAvatar: data.callerAvatar,
-      isVideo: !!data.isVideo,
-      offer: data.offer || null
-    });
+    const targetSocket = online.get(String(d.to));
+    if (!targetSocket) { socket.emit('call_rejected', { reason: 'offline' }); return; }
+    io.to(targetSocket).emit('call_incoming', { ...d, from });
   });
-
-  socket.on('answer_call', (data) => {
-    const from = sockToUser.get(socket.id);
-    emitToUser(data.to, 'call_answered', {
-      ...data,
-      from,
-      answer: data.answer
-    });
-  });
-
-  socket.on('ice_candidate', (data) => {
-    const from = sockToUser.get(socket.id);
-    emitToUser(data.to, 'ice_candidate', {
-      ...data,
-      from,
-      candidate: data.candidate
-    });
-  });
-
-  socket.on('end_call', (data) => {
-    emitToUser(data.to, 'call_ended', { from: sockToUser.get(socket.id) });
-  });
-
-  socket.on('call_reject', (data) => {
-    emitToUser(data.to, 'call_rejected', { reason: 'declined', from: sockToUser.get(socket.id) });
-  });
+  socket.on('call_accept', (d) => emitToUser(d.to, 'call_accepted', d));
+  socket.on('call_reject', (d) => emitToUser(d.to, 'call_rejected', d));
+  socket.on('rtc_offer', (d) => emitToUser(d.to, 'rtc_offer', d));
+  socket.on('rtc_answer', (d) => emitToUser(d.to, 'rtc_answer', d));
+  socket.on('rtc_ice', (d) => emitToUser(d.to, 'rtc_ice', d));
+  socket.on('call_end', (d) => emitToUser(d.to, 'call_ended', d));
 
   socket.on('disconnect', () => {
     const uid = sockToUser.get(socket.id);
     if (uid) {
       online.delete(uid);
       sockToUser.delete(socket.id);
-      io.emit('user_disconnected', { userId: uid });
+      io.emit('user_offline', { userId: uid });
       pool.execute(`UPDATE users SET last_seen=NOW() WHERE id=?`, [uid]).catch(() => {});
-      console.log(`[WS] user offline: ${uid}`);
     }
-    console.log(`[WS] disconnect: ${socket.id}`);
   });
 });
 
 const PORT = process.env.PORT || 3000;
-
 initDB().then(() => {
   server.listen(PORT, () => {
-    console.log('');
-    console.log('  ┌─────────────────────────────────────────┐');
-    console.log(`  │  ego Messenger — запущен                │`);
-    console.log(`  │  http://localhost:${PORT}                  │`);
-    console.log('  └─────────────────────────────────────────┘');
-    console.log('');
+    console.log(`🚀 ego Messenger запущен на порту ${PORT}`);
   });
-}).catch((err) => {
-  console.error('');
-  console.error('  ❌ ОШИБКА ПОДКЛЮЧЕНИЯ К БАЗЕ ДАННЫХ');
-  console.error(`     ${err.message}`);
-  console.error('');
+}).catch(err => {
+  console.error('❌ Ошибка инициализации БД:', err);
   process.exit(1);
 });
